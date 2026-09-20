@@ -1,0 +1,11 @@
+profiles:
+  default:
+    fqbn: 
+    platforms:
+      - platform: arduino:zephyr
+    libraries:
+      - Adafruit BMP280 Library (3.0.0)
+      - dependency: Adafruit BusIO (1.17.4)
+      - Adafruit Unified Sensor (1.1.15)
+
+default_profile: default
