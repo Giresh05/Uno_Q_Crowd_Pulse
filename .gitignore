@@ -1,0 +1,23 @@
+# Arduino / Arduino CLI cache
+.cache/
+
+# Build files
+build/
+build-*/
+
+# Compiled files
+*.o
+*.a
+*.elf
+*.hex
+*.bin
+
+# Editor / OS junk
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
