@@ -1,4 +1,17 @@
 #include <Arduino.h>
+#include <Wire.h>
+#include <Adafruit_BMP280.h>
+#include <DHT.h>
+#include <DHT_U.h>
+
+#define DHTPIN 2
+#define DHTTYPE DHT22
+
+Adafruit_BMP280 bmp;
+DHT_Unified dht(DHTPIN, DHTTYPE);
+
+unsigned long lastSensorReadTime = 0;
+const unsigned long SENSOR_INTERVAL = 2000; // Read env sensors every 2 seconds
 
 void sendCommand(const uint8_t* data, size_t len) {
   Serial1.write(data, len);
@@ -12,10 +25,17 @@ void setup() {
   while (!Serial) { delay(10); }
 
   Serial.println("======================================");
+  Serial.println("Initializing Environmental Sensors...");
+  
+  if (!bmp.begin(0x76)) {
+    Serial.println("BMP280 initialization failed! Check wiring/I2C address.");
+  }
+  
+  dht.begin();
+  
   Serial.println("Configuring mmWave Sensor into Report Mode...");
   
   // The exact command from the documentation image to enable Report Mode
-  // FD FC FB FA | 08 00 | 12 00 | 00 00 | 04 00 00 00 | 04 03 02 01
   uint8_t cmdEnableReport[] = {
     0xFD, 0xFC, 0xFB, 0xFA, 
     0x08, 0x00, 
@@ -27,7 +47,7 @@ void setup() {
   sendCommand(cmdEnableReport, sizeof(cmdEnableReport));
   delay(200); // Give it a moment to switch modes
 
-  Serial.println("Sensor configured successfully! Reading Report Data...");
+  Serial.println("System configured successfully! Reading Data...");
   Serial.println("======================================");
 }
 
@@ -38,6 +58,7 @@ bool receiving = false;
 int expectedLen = 0;
 
 void parseReportFrame(uint8_t* payload, int len);
+void readEnvironmentalSensors();
 
 void loop() {
   // Read incoming bytes from radar
@@ -92,6 +113,41 @@ void loop() {
       }
     }
   }
+
+  // Non-blocking timer for environmental sensors (runs every 2 seconds)
+  if (millis() - lastSensorReadTime >= SENSOR_INTERVAL) {
+    lastSensorReadTime = millis();
+    readEnvironmentalSensors();
+  }
+}
+
+void readEnvironmentalSensors() {
+  float tempBMP = bmp.readTemperature();
+  float pressure = bmp.readPressure();
+
+  Serial.println("\n--- Environment Data ---");
+  Serial.print("BMP280 Temp: "); Serial.print(tempBMP); Serial.println(" *C");
+  Serial.print("BMP280 Pres: "); Serial.print(pressure); Serial.println(" Pa");
+  
+  sensors_event_t event;
+  
+  // Get temperature event
+  dht.temperature().getEvent(&event);
+  if (isnan(event.temperature)) {
+    Serial.println("DHT22 Temp read failed!");
+  } else {
+    Serial.print("DHT22  Temp: "); Serial.print(event.temperature); Serial.println(" *C");
+  }
+
+  // Get humidity event
+  dht.humidity().getEvent(&event);
+  if (isnan(event.relative_humidity)) {
+    Serial.println("DHT22 Humi read failed!");
+  } else {
+    Serial.print("DHT22  Humi: "); Serial.print(event.relative_humidity); Serial.println(" %");
+  }
+  
+  Serial.println("------------------------\n");
 }
 
 void parseReportFrame(uint8_t* payload, int len) {
