@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Crowd Pulse Mesh Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+        --background: #ffffff;
+        --foreground: #090f11;
+        --card: #ffffff;
+        --border: #c9d2d2;
+        --muted: #f7f9f9;
+        --muted-foreground: #7f8c8d;
+    }
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --background: #090f11;
+            --foreground: #ffffff;
+            --card: #171e21;
+            --border: #434f54;
+            --muted: #232b2e;
+            --muted-foreground: #aeb8b8;
+        }
+    }
+    body {
+        background-color: var(--background);
+        color: var(--foreground);
+    }
+    .bg-card { background-color: var(--card); }
+    .border-border { border-color: var(--border); }
+    .text-muted { color: var(--muted-foreground); }
+    .bg-muted { background-color: var(--muted); }
+  </style>
+</head>
+<body class="antialiased p-4 md:p-8 font-sans">
+  
+  <div class="max-w-7xl mx-auto space-y-6">
+    <!-- Header -->
+    <header class="flex items-center justify-between border-b border-border pb-4">
+      <div>
+        <h1 class="text-3xl font-bold tracking-tight">Crowd Pulse</h1>
+        <p class="text-muted">Decentralized LoRa Mesh Network</p>
+      </div>
+      <div class="flex items-center space-x-2">
+        <span class="relative flex h-3 w-3">
+          <span id="pulse-ping" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+          <span id="pulse-dot" class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+        </span>
+        <span id="connection-status" class="text-sm font-medium text-muted">Connecting...</span>
+      </div>
+    </header>
+
+    <!-- Global Threat Banner -->
+    <div id="alert-banner" class="rounded-2xl p-6 border border-border bg-card flex flex-col items-center justify-center text-center space-y-2 shadow-sm transition-colors duration-500">
+      <h2 class="text-lg font-semibold text-muted uppercase tracking-widest">Global Network Status</h2>
+      <div id="alert-text" class="text-4xl font-black uppercase tracking-tight">ANALYZING</div>
+      <p id="alert-subtext" class="text-sm text-muted max-w-lg">Establishing connection to local inference engine.</p>
+    </div>
+
+    <!-- Nodes Grid -->
+    <div id="nodes-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <!-- Node Cards Will Be Injected Here -->
+    </div>
+
+  </div>
+
+  <script>
+    const API_URL = '/api/status';
+    
+    // DOM Elements
+    const pingEl = document.getElementById('pulse-ping');
+    const dotEl = document.getElementById('pulse-dot');
+    const statusTextEl = document.getElementById('connection-status');
+    const bannerEl = document.getElementById('alert-banner');
+    const alertTextEl = document.getElementById('alert-text');
+    const alertSubtextEl = document.getElementById('alert-subtext');
+    const nodesGrid = document.getElementById('nodes-grid');
+
+    function createNodeCard(nodeId, data, gatewayAcoustic) {
+      const isAlert = data.alert_state;
+      const cardColor = isAlert ? 'border-red-500 bg-red-950/10' : 'border-border bg-card';
+      const scoreColor = isAlert ? 'text-red-500' : (data.fused_score > 0.4 ? 'text-amber-500' : 'text-emerald-500');
+      
+      const metrics = data.metrics;
+
+      return `
+      <div class="rounded-xl p-6 border ${cardColor} shadow-sm space-y-4" id="node-${nodeId}">
+        <div class="flex justify-between items-start">
+          <div>
+            <h3 class="text-xl font-bold">Node ${nodeId}</h3>
+            <p class="text-muted text-xs">Version: ${data.version}</p>
+          </div>
+          <div class="text-3xl font-black ${scoreColor}">${data.fused_score.toFixed(3)}</div>
+        </div>
+        
+        <div class="space-y-3 pt-2">
+          <!-- Env -->
+          <div>
+            <div class="flex justify-between items-end mb-1 text-sm">
+              <span class="font-medium text-muted">Environmental</span>
+              <span class="font-bold">${data.env_score.toFixed(3)}</span>
+            </div>
+            <div class="h-2 w-full bg-muted rounded-full overflow-hidden border border-border">
+              <div class="h-full bg-blue-500" style="width: ${Math.min(100, data.env_score * 100)}%"></div>
+            </div>
+          </div>
+          
+          <!-- Acoustic -->
+          <div>
+            <div class="flex justify-between items-end mb-1 text-sm">
+              <span class="font-medium text-muted">Acoustic (Gateway)</span>
+              <span class="font-bold">${gatewayAcoustic.toFixed(3)}</span>
+            </div>
+            <div class="h-2 w-full bg-muted rounded-full overflow-hidden border border-border">
+              <div class="h-full bg-purple-500" style="width: ${Math.min(100, gatewayAcoustic * 100)}%"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 xl:grid-cols-4 gap-2 mt-4 pt-4 border-t border-border">
+          <div class="p-2 rounded-lg bg-background border border-border text-center">
+            <div class="text-muted text-[10px] uppercase font-bold">Temp (C)</div>
+            <div class="text-lg font-semibold">${metrics.bmp_temp.toFixed(1)}</div>
+          </div>
+          <div class="p-2 rounded-lg bg-background border border-border text-center">
+            <div class="text-muted text-[10px] uppercase font-bold">Hum (%)</div>
+            <div class="text-lg font-semibold">${metrics.dht_humi.toFixed(1)}</div>
+          </div>
+          <div class="p-2 rounded-lg bg-background border border-border text-center">
+            <div class="text-muted text-[10px] uppercase font-bold">Pres (Pa)</div>
+            <div class="text-lg font-semibold">${metrics.bmp_pres.toFixed(0)}</div>
+          </div>
+          <div class="p-2 rounded-lg bg-background border border-border text-center">
+            <div class="text-muted text-[10px] uppercase font-bold">Radar</div>
+            <div class="text-lg font-semibold">${metrics.radar_density.toLocaleString()}</div>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    async function fetchStatus() {
+      try {
+        const response = await fetch(API_URL);
+        if (!response.ok) throw new Error('Network response was not ok');
+        const payload = await response.json();
+
+        statusTextEl.innerText = 'Connected';
+        pingEl.classList.replace('bg-red-400', 'bg-green-400');
+        dotEl.classList.replace('bg-red-500', 'bg-green-500');
+
+        let globalAlert = false;
+        
+        // Render Node Cards
+        let newHtml = "";
+        const sortedNodes = Object.keys(payload.network).sort((a, b) => parseInt(a) - parseInt(b));
+        
+        for (const nid of sortedNodes) {
+          const nodeData = payload.network[nid];
+          if (nodeData.alert_state) globalAlert = true;
+          newHtml += createNodeCard(nid, nodeData, payload.gateway_acoustic);
+        }
+        
+        nodesGrid.innerHTML = newHtml;
+
+        // Update Main Alert Banner
+        if (globalAlert) {
+          bannerEl.className = 'rounded-2xl p-6 border border-red-500 bg-red-950/20 flex flex-col items-center justify-center text-center space-y-2 shadow-sm transition-colors duration-500';
+          alertTextEl.innerText = 'THREAT DETECTED';
+          alertTextEl.className = 'text-4xl font-black uppercase tracking-tight text-red-500 animate-pulse';
+          alertSubtextEl.innerText = 'Critical risk threshold exceeded on one or more nodes.';
+        } else {
+          bannerEl.className = 'rounded-2xl p-6 border border-emerald-500/50 bg-emerald-950/10 flex flex-col items-center justify-center text-center space-y-2 shadow-sm transition-colors duration-500';
+          alertTextEl.innerText = 'NETWORK NORMAL';
+          alertTextEl.className = 'text-4xl font-black uppercase tracking-tight text-emerald-500';
+          alertSubtextEl.innerText = 'All mesh nodes are reporting safe baseline metrics.';
+        }
+
+      } catch (err) {
+        console.error("Polling error:", err);
+        statusTextEl.innerText = 'Connection Lost';
+        pingEl.classList.replace('bg-green-400', 'bg-red-400');
+        dotEl.classList.replace('bg-green-500', 'bg-red-500');
+      }
+    }
+
+    setInterval(fetchStatus, 1000);
+    fetchStatus(); 
+  </script>
+</body>
+</html>

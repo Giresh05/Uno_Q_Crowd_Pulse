@@ -1,0 +1,5 @@
+name: Sensor integration
+description: Reads Waveshare mmWave and BMP280 sensors and prints to Serial monitor.
+ports: []
+bricks: []
+icon: 📡
