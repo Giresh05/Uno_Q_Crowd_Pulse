@@ -1,6 +1,6 @@
-### CrowdPulse: A Mesh-Networked Edge-AI Early Warning System for Crowd Crush Prevention
+# CrowdPulse: Mesh-Networked Edge-AI Early Warning System
 
-**Abstract**
+## Abstract
 
 Mass public gatherings — religious festivals, election rallies, political campaigns — are a recurring feature of Indian public life, and a recurring source of preventable tragedy. Stampedes and crowd-crush events typically develop from localized precursors — a sudden surge in density, erratic or reversed movement at a chokepoint, rising acoustic panic — that are invisible to manual observation until the situation has already become dangerous. Existing crowd-safety infrastructure is largely reactive: CCTV reviewed after the fact, or simple sensor deployments that stream raw data to a cloud backend for analysis. This dependency is a critical design flaw, since venue networks are typically the first infrastructure to saturate or fail under the exact crowd load that makes monitoring most urgent.
 
@@ -13,3 +13,36 @@ Nodes exchange stress scores over a **LoRa mesh** (SX1278, SPI), chosen specific
 When correlated risk crosses a defined threshold, affected nodes trigger local alerts and flag the at-risk zone for event organizers — with the entire detection pipeline, from raw sensor sampling to anomaly inference to mesh alerting, computed at the edge and requiring no external connectivity.
 
 The Uno Q's dual-processor architecture is the specific enabling factor for this design: the STM32U585 provides the deterministic multi-protocol sensor sampling (UART, I2C, single-wire) that real-time fusion requires, while the QRB2210 provides USB host support for live audio and sufficient compute for on-device model inference — capabilities that would otherwise require either splitting the system across two separate boards or offloading inference to a cloud service, undermining the project's core no-connectivity design goal.
+
+## System Architecture
+
+The system consists of independent sensor nodes communicating via a decentralized LoRa mesh network. The hardware and software stack per node includes:
+
+### Hardware Requirements
+- **Arduino UNO Q** (Dual-processor edge AI board)
+- **SX1278 LoRa Module** (433MHz, SPI)
+- **Waveshare S3KM1110 24GHz mmWave Radar** (UART)
+- **BMP280 Sensor** (Temperature & Pressure, I2C)
+- **DHT22 Sensor** (Humidity)
+- **USB Microphone** (for acoustic anomaly detection)
+
+### Software Components
+- **Arduino Sketch (`sketch/sketch.ino`)**: Handles deterministic, real-time sampling of the environmental and radar sensors. It maintains a CRDT (Conflict-free Replicated Data Type) based decentralized state table, broadcasting node state via LoRa, and pushing the network state over a custom serial bridge to the Python environment.
+- **Python Pipeline (`python/main_pipeline.py`)**: Runs on the Linux side of the Uno Q. It reads the bridged serial data, runs real-time environmental anomaly detection using a pre-trained `IsolationForest` model, runs acoustic anomaly detection using a quantized `YAMNet` TFLite model, fuses the sensor scores, and hosts a local JSON API and dashboard.
+
+## Setup & Installation
+
+1. **Hardware Assembly**: Connect the sensors to the Arduino Uno Q as defined by the pinouts in `sketch/sketch.ino`.
+2. **Flash MCU**: Flash the `sketch.ino` file to the STM32U585 processor.
+3. **Python Environment**: Install the required Python packages on the Linux side:
+   ```bash
+   pip install flask flask-cors pandas numpy scikit-learn joblib tflite-runtime
+   ```
+
+## Running the System
+
+Start the Python inference and dashboard server:
+```bash
+python python/main_pipeline.py
+```
+The server will initialize the MCU bridge, start reading from the mesh network, load the ML models, and spin up a Flask dashboard on port `5000`. Access the dashboard in your browser via `http://<uno-q-ip>:5000`.

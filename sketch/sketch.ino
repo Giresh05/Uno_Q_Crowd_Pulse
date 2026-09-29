@@ -5,13 +5,13 @@
 #include <DHT_U.h>
 #include <SPI.h>
 #include <LoRa.h>
-#include <Arduino_RouterBridge.h> // REQUIRED FOR UNO Q MONITOR ROUTING
+#include <Arduino_RouterBridge.h> // Router bridge integration
 
-// --- NODE CONFIGURATION ---
-#define MY_NODE_ID 1  // Change this for each physical board (1, 2, 3...)
+// Node configuration
+#define MY_NODE_ID 1  // Identifier for this physical board
 #define MAX_NODES 10
 
-// --- HARDWARE PINS ---
+// Hardware pins
 #define DHTPIN 2
 #define DHTTYPE DHT22
 #define LORA_SS 10
@@ -21,7 +21,7 @@
 Adafruit_BMP280 bmp;
 DHT_Unified dht(DHTPIN, DHTTYPE);
 
-// --- DECENTRALIZED STATE STRUCTURE ---
+// Decentralized state structure
 #pragma pack(push, 1)
 struct NodeData {
   uint32_t version;
@@ -40,7 +40,7 @@ struct LoRaPacket {
 };
 #pragma pack(pop)
 
-// --- CUSTOM MINI BRIDGE (UNO Q MONITOR EDITION) ---
+// Custom mini bridge for serial communication
 class MiniBridge {
   public:
     void begin() {
@@ -75,10 +75,10 @@ void sendCommand(const uint8_t* data, size_t len) {
 }
 
 void setup() {
-  // Use official Uno Q RouterBridge monitor!
+  // Initialize bridge
   bridge.begin();
   
-  // Keep Serial1 for the mmWave Radar!
+  // Initialize Serial1 for mmWave Radar
   Serial1.begin(115200);
 
   bmp.begin(0x76);
@@ -90,14 +90,14 @@ void setup() {
     bridge.put("error", "LoRa init failed. Check wiring.");
   }
   
-  // Enable Report Mode for mmWave
+  // Enable report mode for mmWave radar
   uint8_t cmdEnableReport[] = {
     0xFD, 0xFC, 0xFB, 0xFA, 0x08, 0x00, 0x12, 0x00, 
     0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x04, 0x03, 0x02, 0x01
   };
   sendCommand(cmdEnableReport, sizeof(cmdEnableReport));
   
-  // Init local state memory
+  // Initialize local state memory
   for(int i=0; i<=MAX_NODES; i++) {
     globalState[i].version = 0;
   }
@@ -186,10 +186,10 @@ void receiveGossip() {
     LoRaPacket pkt;
     LoRa.readBytes((uint8_t*)&pkt, sizeof(pkt));
     
-    // CRDT Last-Writer-Wins Merge
+    // CRDT Last-Writer-Wins merge logic
     for (int i=0; i<pkt.numNodes; i++) {
       uint8_t id = pkt.nodeIds[i];
-      if (id > 0 && id <= MAX_NODES && id != MY_NODE_ID) { // Never overwrite my own truth
+      if (id > 0 && id <= MAX_NODES && id != MY_NODE_ID) { // Ignore self-updates
         if (pkt.nodes[i].version > globalState[id].version) {
           globalState[id] = pkt.nodes[i];
         }
@@ -199,7 +199,7 @@ void receiveGossip() {
 }
 
 void reportStateToPython() {
-  // Output full network state as JSON array via our Custom Bridge Protocol
+  // Output full network state as a JSON array
   String json = "[";
   bool first = true;
   for(int i=1; i<=MAX_NODES; i++) {
@@ -219,7 +219,7 @@ void reportStateToPython() {
   }
   json += "]";
   
-  // Custom Bridge Output using Uno Q Zephyr Monitor
+  // Output data over bridge
   bridge.put("network_state", json);
 }
 

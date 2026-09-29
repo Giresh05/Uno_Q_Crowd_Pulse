@@ -10,9 +10,7 @@ import joblib
 from flask import Flask, jsonify, render_template
 from flask_cors import CORS
 
-# ---------------------------------------------------------
-# INITIALIZATION
-# ---------------------------------------------------------
+# Application Initialization
 app = Flask(__name__)
 CORS(app)
 
@@ -24,14 +22,12 @@ env_model = None
 network_state = {} 
 current_gateway_acoustic_score = 0.0
 
-# ---------------------------------------------------------
-# CUSTOM BRIDGE CLIENT (ARDUINO-APP-CLI MONITOR EDITION)
-# ---------------------------------------------------------
+# Bridge Client for MCU Communication
 class BridgeClient:
     def __init__(self):
         self.kv_store = {}
         try:
-            # Instead of pyserial, we spawn the official CLI monitor!
+            # Spawn the official CLI monitor for serial communication
             self.process = subprocess.Popen(
                 ['arduino-app-cli', 'monitor'],
                 stdout=subprocess.PIPE,
@@ -116,44 +112,7 @@ def phase1_and_2_arduino_ingestion_thread():
                         }
             except Exception:
                 pass
-        else:
-            # MOCK DECENTRALIZED MESH DATA
-            for nid in ["1", "2", "3"]:
-                nd = {
-                    "node_id": nid,
-                    "version": int(time.time()),
-                    "bmp_temp": 34.0 + random.uniform(-1, 1),
-                    "bmp_pres": 97334 + random.uniform(-10, 10),
-                    "dht_temp": 33.0 + random.uniform(-1, 1),
-                    "dht_humi": 56.0 + random.uniform(-2, 2),
-                    "radar_density": int(random.uniform(50000, 100000))
-                }
-                if nid == "3" and random.random() > 0.8:
-                    nd["radar_density"] = int(random.uniform(200000, 300000))
-                    nd["bmp_temp"] = 45.0
-                    
-                env_score = 0.0
-                if env_scaler and env_model:
-                    features = pd.DataFrame([{
-                        'bmp_temp': nd['bmp_temp'],
-                        'bmp_pres': nd['bmp_pres'],
-                        'dht_temp': nd['dht_temp'],
-                        'dht_humi': nd['dht_humi'],
-                        'radar_density_score': nd['radar_density']
-                    }])
-                    scaled_f = env_scaler.transform(features)
-                    anomaly_score_raw = env_model.decision_function(scaled_f)[0]
-                    env_score = 1.0 - (1.0 / (1.0 + np.exp(-anomaly_score_raw * -3.0)))
-                    
-                network_state[nid] = {
-                    "version": nd["version"],
-                    "metrics": nd,
-                    "env_score": float(env_score),
-                    "fused_score": 0.0,
-                    "alert_state": False,
-                    "last_seen": time.time()
-                }
-            time.sleep(2)
+
             
         time.sleep(0.05)
 
@@ -248,9 +207,7 @@ def phase4_fusion_logic_thread():
             
         time.sleep(1)
 
-# ---------------------------------------------------------
-# PHASE 5: Real-Time Inference Serving (JSON API)
-# ---------------------------------------------------------
+# Real-Time Inference Serving (JSON API)
 @app.route('/')
 def index():
     return render_template('dashboard.html')
